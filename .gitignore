@@ -1,0 +1,7 @@
+.env
+*.log
+post_history.json
+venv/
+__pycache__/
+*.pyc
+.DS_Store
