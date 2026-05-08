@@ -5,7 +5,7 @@ import random
 from pathlib import Path
 from dotenv import load_dotenv
 
-from groq import AsyncGroq
+import google.generativeai as genai
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -13,7 +13,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 # ── Load env ──────────────────────────────────────────────────────────────────
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-GROQ_API_KEY   = os.getenv("GROQ_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 CHANNEL_ID     = int(os.getenv("CHANNEL_ID", "-1003903707711"))
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
@@ -36,8 +36,8 @@ logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 
-# ── Groq setup ────────────────────────────────────────────────────────────────
-groq_client = AsyncGroq(api_key=GROQ_API_KEY)
+# ── Gemini setup ──────────────────────────────────────────────────────────────
+genai.configure(api_key=GEMINI_API_KEY)
 
 # ── Пост банкі: аят пен хадис алдын ала тексерілген ──────────────────────────
 # Аят аудармалары: ҚМДБ бекіткен нұсқа негізінде.
@@ -318,19 +318,23 @@ REFLECTION_TEMPLATE = """
 [нақты амал] — [пайдасы]. [эмодзи]
 """
 
+gemini_model = genai.GenerativeModel(
+    model_name="gemini-2.0-flash",
+    system_instruction=SYSTEM_PROMPT,
+)
+
+
 async def generate_post(post: dict) -> str:
     prompt = REFLECTION_TEMPLATE.format(**post)
     try:
-        response = await groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user",   "content": prompt},
-            ],
-            max_tokens=600,
-            temperature=0.75,
+        response = await gemini_model.generate_content_async(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                max_output_tokens=600,
+                temperature=0.75,
+            ),
         )
-        reflection = response.choices[0].message.content.strip()
+        reflection = response.text.strip()
 
         text = (
             f"*{post['topic']}*\n\n"
@@ -343,7 +347,7 @@ async def generate_post(post: dict) -> str:
             text = text[:4093] + "..."
         return text
     except Exception as e:
-        logger.error(f"Groq generation error: {e}")
+        logger.error(f"Gemini generation error: {e}")
         raise
 
 
@@ -437,8 +441,8 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 def main() -> None:
     if not TELEGRAM_TOKEN:
         raise ValueError("TELEGRAM_TOKEN is not set in .env")
-    if not GROQ_API_KEY:
-        raise ValueError("GROQ_API_KEY is not set in .env")
+    if not GEMINI_API_KEY:
+        raise ValueError("GEMINI_API_KEY is not set in .env")
 
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
