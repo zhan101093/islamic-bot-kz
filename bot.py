@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import random
+import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
@@ -320,36 +321,42 @@ REFLECTION_TEMPLATE = """
 """
 
 gemini_model = genai.GenerativeModel(
-    model_name="gemini-2.0-flash",
+    model_name="gemini-1.5-flash",
     system_instruction=SYSTEM_PROMPT,
 )
 
 
 async def generate_post(post: dict) -> str:
     prompt = REFLECTION_TEMPLATE.format(**post)
-    try:
-        response = await gemini_model.generate_content_async(
-            prompt,
-            generation_config=genai.types.GenerationConfig(
-                max_output_tokens=600,
-                temperature=0.75,
-            ),
-        )
-        reflection = response.text.strip()
-
-        text = (
-            f"*{post['topic']}*\n\n"
-            f"📖 {post['ayah_arabic']}\n"
-            f"_{post['ayah_kazakh']}_ ({post['ayah_source']})\n\n"
-            f"📜 _{post['hadith']}_ ({post['hadith_source']})\n\n"
-            f"{reflection}"
-        )
-        if len(text) > 4096:
-            text = text[:4093] + "..."
-        return text
-    except Exception as e:
-        logger.error(f"Gemini generation error: {e}")
-        raise
+    for attempt in range(3):
+        try:
+            response = await gemini_model.generate_content_async(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    max_output_tokens=600,
+                    temperature=0.75,
+                ),
+            )
+            reflection = response.text.strip()
+            text = (
+                f"*{post['topic']}*\n\n"
+                f"📖 {post['ayah_arabic']}\n"
+                f"_{post['ayah_kazakh']}_ ({post['ayah_source']})\n\n"
+                f"📜 _{post['hadith']}_ ({post['hadith_source']})\n\n"
+                f"{reflection}"
+            )
+            if len(text) > 4096:
+                text = text[:4093] + "..."
+            return text
+        except Exception as e:
+            err = str(e)
+            if "429" in err and attempt < 2:
+                wait = 60 * (attempt + 1)
+                logger.warning(f"Gemini 429 — {wait}с күтіп қайталаймын ({attempt+1}/3)")
+                await asyncio.sleep(wait)
+            else:
+                logger.error(f"Gemini generation error: {e}")
+                raise
 
 
 # ── Post sender ───────────────────────────────────────────────────────────────
