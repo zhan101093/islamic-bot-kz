@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import random
+from datetime import datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -456,15 +457,22 @@ def main() -> None:
     scheduler = AsyncIOScheduler(timezone="Asia/Almaty")
     scheduler.add_job(
         send_daily_post,
-        trigger           = "cron",
-        hour              = "9,20",
-        minute            = 0,
-        kwargs            = {"app": app},
-        id                = "post_morning",
-        misfire_grace_time= 3600,
+        trigger            = "cron",
+        hour               = "9,20",
+        minute             = 0,
+        kwargs             = {"app": app},
+        id                 = "post_cron",
+        misfire_grace_time = 3600,
+    )
+    scheduler.add_job(
+        send_daily_post,
+        trigger  = "date",
+        run_date = datetime.now() + timedelta(seconds=30),
+        kwargs   = {"app": app},
+        id       = "post_now",
     )
     scheduler.start()
-    logger.info("Scheduler started — posts at 09:00 and 20:00 (Almaty)")
+    logger.info("Scheduler started — first post in 30s, then 09:00 and 20:00 (Almaty)")
 
     logger.info("Bot is running...")
     app.run_polling(drop_pending_updates=True)
