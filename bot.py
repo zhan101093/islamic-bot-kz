@@ -453,17 +453,18 @@ def main() -> None:
     app.add_handler(CommandHandler("plan",    cmd_plan))
     app.add_error_handler(error_handler)
 
-    scheduler = AsyncIOScheduler()
+    scheduler = AsyncIOScheduler(timezone="Asia/Almaty")
     scheduler.add_job(
         send_daily_post,
-        trigger = "interval",
-        hours   = 12,
-        kwargs  = {"app": app},
-        id      = "post_job",
-        name    = "Islamic post every 12h",
+        trigger           = "cron",
+        hour              = "9,20",
+        minute            = 0,
+        kwargs            = {"app": app},
+        id                = "post_morning",
+        misfire_grace_time= 3600,
     )
     scheduler.start()
-    logger.info("Scheduler started — posts every 12 hours")
+    logger.info("Scheduler started — posts at 09:00 and 20:00 (Almaty)")
 
     logger.info("Bot is running...")
     app.run_polling(drop_pending_updates=True)
